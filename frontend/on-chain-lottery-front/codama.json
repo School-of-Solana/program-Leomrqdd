@@ -1,0 +1,30 @@
+{
+  "idl": "../../programs/on-chain-lottery/target/idl/on_chain_lottery.json",
+  "before": [],
+  "scripts": {
+    "js": {
+      "from": "@codama/renderers-js",
+      "args": [
+        "src/clients/generated",
+        {
+          "dependencyMap": {
+            "solanaAccounts": "gill",
+            "solanaAddresses": "gill",
+            "solanaCodecsCore": "gill",
+            "solanaCodecsDataStructures": "gill",
+            "solanaCodecsNumbers": "gill",
+            "solanaCodecsStrings": "gill",
+            "solanaErrors": "gill",
+            "solanaInstructions": "gill",
+            "solanaOptions": "gill",
+            "solanaPrograms": "gill",
+            "solanaRpcTypes": "gill",
+            "solanaSigners": "gill"
+          }
+        }
+      ]
+    }
+  }
+}
+
+

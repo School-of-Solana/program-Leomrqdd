@@ -6,6 +6,8 @@ const links: { label: string; path: string }[] = [
   //
   { label: 'Home', path: '/' },
   { label: 'Account', path: '/account' },
+  { label: 'Lottery', path: '/lottery' },
+  { label: 'Admin', path: '/admin' },
 ]
 
 export function App() {
