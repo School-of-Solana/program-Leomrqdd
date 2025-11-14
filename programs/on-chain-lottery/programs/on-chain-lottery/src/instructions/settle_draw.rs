@@ -17,29 +17,24 @@ pub struct SettleDraw<'info> {
     )]
     pub vault: Account<'info,Vault>,
 }
-pub fn _settle_draw(ctx:Context<SettleDraw>) -> Result<()> {
+pub fn _settle_draw(ctx:Context<SettleDraw>, winner_id: u64) -> Result<()> {
+    // no random first or done outside
     let vault = &mut ctx.accounts.vault;
     require!(vault.locked,VaultError::VaultNotLocked);
     require!(vault.participant_count>0, VaultError::NoParticipants);
     require!(vault.drawn == false, VaultError::AlreadyDrawn);
     require!(vault.claimed == false, VaultError::AlreadyClaimed);
 
-    let clock = Clock::get()?;
-    // Very naive "randomness": use current slot only
-    let slot = clock.slot;
-    let winner_id = slot % vault.participant_count;
+    // Validate provided winner id against participant count
+    require!(winner_id < vault.participant_count, VaultError::InvalidWinner);
 
+    // Update vault state
     vault.winner_id = winner_id;
     vault.drawn = true;
-
-    // Build a trivial 32-byte "randomness" from slot
-    let mut randomness = [0u8; 32];
-    randomness[..8].copy_from_slice(&slot.to_le_bytes());
 
     emit!(WinnerDrawnEvent {
         vault: vault.key(),
         winner_id,
-        randomness,
     });
 
     Ok(())

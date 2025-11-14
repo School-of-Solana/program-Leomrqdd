@@ -49,8 +49,8 @@ pub mod on_chain_lottery {
       _commit_draw(ctx)
     }
 
-    pub fn settle_draw(ctx: Context<SettleDraw>) -> Result<()> {
-      _settle_draw(ctx)
+    pub fn settle_draw(ctx: Context<SettleDraw>, winner_id: u64) -> Result<()> {
+      _settle_draw(ctx, winner_id)
     }
 
     pub fn claim_if_winner(ctx: Context<ClaimIfWinner>) -> Result<()> {

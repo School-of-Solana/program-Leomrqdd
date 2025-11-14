@@ -26,7 +26,6 @@ pub struct ToggleLockEvent {
 pub struct WinnerDrawnEvent {
     pub vault: Pubkey,
     pub winner_id: u64,
-    pub randomness: [u8; 32],
 }
 
 #[event]
