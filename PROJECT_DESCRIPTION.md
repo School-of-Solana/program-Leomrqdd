@@ -1,6 +1,6 @@
 # Project Description
 
-**Deployed Frontend URL:** [TODO: Link to your deployed frontend]
+**Deployed Frontend URL:** https://ackee-vercel-lottery.vercel.app/
 
 **Solana Program ID:** 4NYnTNsnq6xhph3QV9yKdou9uFuAmAqR236bPu8uXPcc (Devnet)
 
