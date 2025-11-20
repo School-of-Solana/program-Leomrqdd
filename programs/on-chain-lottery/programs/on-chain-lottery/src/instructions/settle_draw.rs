@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use crate::state::Vault;
 use crate::errors::VaultError;
 use crate::events::WinnerDrawnEvent;
-// Naive randomness: no external dependency
+use orao_solana_vrf::state::RandomnessAccountData;
 
 
 #[derive(Accounts)]
@@ -16,17 +16,28 @@ pub struct SettleDraw<'info> {
         bump
     )]
     pub vault: Account<'info,Vault>,
+    /// CHECK: Must match the VRF randomness account stored in vault
+    #[account(address = vault.randomness_account)]
+    pub random: AccountInfo<'info>,
 }
-pub fn _settle_draw(ctx:Context<SettleDraw>, winner_id: u64) -> Result<()> {
-    // no random first or done outside
+pub fn _settle_draw(ctx:Context<SettleDraw>) -> Result<()> {
     let vault = &mut ctx.accounts.vault;
     require!(vault.locked,VaultError::VaultNotLocked);
     require!(vault.participant_count>0, VaultError::NoParticipants);
     require!(vault.drawn == false, VaultError::AlreadyDrawn);
     require!(vault.claimed == false, VaultError::AlreadyClaimed);
 
-    // Validate provided winner id against participant count
-    require!(winner_id < vault.participant_count, VaultError::InvalidWinner);
+    // Read ORAO VRF randomness account and ensure it's fulfilled
+    let mut data: &[u8] = &ctx.accounts.random.try_borrow_data()?;
+    let randomness_account = RandomnessAccountData::try_deserialize_unchecked(&mut data)?;
+    let randomness = match randomness_account.fulfilled_randomness() {
+        Some(bytes) => bytes,
+        None => return err!(VaultError::RandomnessNotResolved),
+    };
+
+    // Map randomness to a winner id in [0, participant_count)
+    let value = u64::from_le_bytes(randomness[0..8].try_into().unwrap());
+    let winner_id = value % vault.participant_count;
 
     // Update vault state
     vault.winner_id = winner_id;
