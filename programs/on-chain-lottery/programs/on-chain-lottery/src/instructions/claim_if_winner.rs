@@ -55,6 +55,15 @@ pub fn _claim_if_winner(ctx: Context<ClaimIfWinner>) -> Result<()> {
 
     let payout = vault.to_account_info().lamports();
     vault.claimed = true;
+
+     // Reset all vault fields before closing
+     vault.locked = false;
+     vault.participant_count = 0;
+     vault.randomness_account = Pubkey::default();
+     vault.commit_slot = 0;
+     vault.winner_id = 0;
+     vault.drawn = false;
+     vault.claimed = true;
     
     emit!(WinnerClaimedEvent {
         vault: vault.key(),
