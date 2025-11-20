@@ -8,6 +8,8 @@
 
 export * from './depositEvent';
 export * from './initializeVaultEvent';
+export * from './networkConfiguration';
+export * from './oraoTokenFeeConfig';
 export * from './toggleLockEvent';
 export * from './winnerClaimedEvent';
 export * from './winnerDrawnEvent';

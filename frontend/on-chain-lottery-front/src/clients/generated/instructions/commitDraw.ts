@@ -26,6 +26,7 @@ import {
   type Instruction,
   type InstructionWithAccounts,
   type InstructionWithData,
+  type ReadonlyAccount,
   type ReadonlyUint8Array,
   type TransactionSigner,
   type WritableAccount,
@@ -34,6 +35,7 @@ import {
 import { ON_CHAIN_LOTTERY_PROGRAM_ADDRESS } from '../programs';
 import {
   expectAddress,
+  expectSome,
   getAccountMetaFactory,
   type ResolvedAccount,
 } from '../shared';
@@ -50,6 +52,15 @@ export type CommitDrawInstruction<
   TProgram extends string = typeof ON_CHAIN_LOTTERY_PROGRAM_ADDRESS,
   TAccountVaultAuthority extends string | AccountMeta<string> = string,
   TAccountVault extends string | AccountMeta<string> = string,
+  TAccountTreasury extends string | AccountMeta<string> = string,
+  TAccountConfig extends string | AccountMeta<string> = string,
+  TAccountRandom extends string | AccountMeta<string> = string,
+  TAccountVrf extends
+    | string
+    | AccountMeta<string> = 'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y',
+  TAccountSystemProgram extends
+    | string
+    | AccountMeta<string> = '11111111111111111111111111111111',
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
 > = Instruction<TProgram> &
   InstructionWithData<ReadonlyUint8Array> &
@@ -62,17 +73,36 @@ export type CommitDrawInstruction<
       TAccountVault extends string
         ? WritableAccount<TAccountVault>
         : TAccountVault,
+      TAccountTreasury extends string
+        ? WritableAccount<TAccountTreasury>
+        : TAccountTreasury,
+      TAccountConfig extends string
+        ? WritableAccount<TAccountConfig>
+        : TAccountConfig,
+      TAccountRandom extends string
+        ? WritableAccount<TAccountRandom>
+        : TAccountRandom,
+      TAccountVrf extends string ? ReadonlyAccount<TAccountVrf> : TAccountVrf,
+      TAccountSystemProgram extends string
+        ? ReadonlyAccount<TAccountSystemProgram>
+        : TAccountSystemProgram,
       ...TRemainingAccounts,
     ]
   >;
 
-export type CommitDrawInstructionData = { discriminator: ReadonlyUint8Array };
+export type CommitDrawInstructionData = {
+  discriminator: ReadonlyUint8Array;
+  force: ReadonlyUint8Array;
+};
 
-export type CommitDrawInstructionDataArgs = {};
+export type CommitDrawInstructionDataArgs = { force: ReadonlyUint8Array };
 
 export function getCommitDrawInstructionDataEncoder(): FixedSizeEncoder<CommitDrawInstructionDataArgs> {
   return transformEncoder(
-    getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)]]),
+    getStructEncoder([
+      ['discriminator', fixEncoderSize(getBytesEncoder(), 8)],
+      ['force', fixEncoderSize(getBytesEncoder(), 32)],
+    ]),
     (value) => ({ ...value, discriminator: COMMIT_DRAW_DISCRIMINATOR })
   );
 }
@@ -80,6 +110,7 @@ export function getCommitDrawInstructionDataEncoder(): FixedSizeEncoder<CommitDr
 export function getCommitDrawInstructionDataDecoder(): FixedSizeDecoder<CommitDrawInstructionData> {
   return getStructDecoder([
     ['discriminator', fixDecoderSize(getBytesDecoder(), 8)],
+    ['force', fixDecoderSize(getBytesDecoder(), 32)],
   ]);
 }
 
@@ -96,20 +127,53 @@ export function getCommitDrawInstructionDataCodec(): FixedSizeCodec<
 export type CommitDrawAsyncInput<
   TAccountVaultAuthority extends string = string,
   TAccountVault extends string = string,
+  TAccountTreasury extends string = string,
+  TAccountConfig extends string = string,
+  TAccountRandom extends string = string,
+  TAccountVrf extends string = string,
+  TAccountSystemProgram extends string = string,
 > = {
   vaultAuthority: TransactionSigner<TAccountVaultAuthority>;
   vault?: Address<TAccountVault>;
+  treasury: Address<TAccountTreasury>;
+  config?: Address<TAccountConfig>;
+  random?: Address<TAccountRandom>;
+  vrf?: Address<TAccountVrf>;
+  systemProgram?: Address<TAccountSystemProgram>;
+  force: CommitDrawInstructionDataArgs['force'];
 };
 
 export async function getCommitDrawInstructionAsync<
   TAccountVaultAuthority extends string,
   TAccountVault extends string,
+  TAccountTreasury extends string,
+  TAccountConfig extends string,
+  TAccountRandom extends string,
+  TAccountVrf extends string,
+  TAccountSystemProgram extends string,
   TProgramAddress extends Address = typeof ON_CHAIN_LOTTERY_PROGRAM_ADDRESS,
 >(
-  input: CommitDrawAsyncInput<TAccountVaultAuthority, TAccountVault>,
+  input: CommitDrawAsyncInput<
+    TAccountVaultAuthority,
+    TAccountVault,
+    TAccountTreasury,
+    TAccountConfig,
+    TAccountRandom,
+    TAccountVrf,
+    TAccountSystemProgram
+  >,
   config?: { programAddress?: TProgramAddress }
 ): Promise<
-  CommitDrawInstruction<TProgramAddress, TAccountVaultAuthority, TAccountVault>
+  CommitDrawInstruction<
+    TProgramAddress,
+    TAccountVaultAuthority,
+    TAccountVault,
+    TAccountTreasury,
+    TAccountConfig,
+    TAccountRandom,
+    TAccountVrf,
+    TAccountSystemProgram
+  >
 > {
   // Program address.
   const programAddress =
@@ -119,11 +183,19 @@ export async function getCommitDrawInstructionAsync<
   const originalAccounts = {
     vaultAuthority: { value: input.vaultAuthority ?? null, isWritable: true },
     vault: { value: input.vault ?? null, isWritable: true },
+    treasury: { value: input.treasury ?? null, isWritable: true },
+    config: { value: input.config ?? null, isWritable: true },
+    random: { value: input.random ?? null, isWritable: true },
+    vrf: { value: input.vrf ?? null, isWritable: false },
+    systemProgram: { value: input.systemProgram ?? null, isWritable: false },
   };
   const accounts = originalAccounts as Record<
     keyof typeof originalAccounts,
     ResolvedAccount
   >;
+
+  // Original args.
+  const args = { ...input };
 
   // Resolve default values.
   if (!accounts.vault.value) {
@@ -137,41 +209,120 @@ export async function getCommitDrawInstructionAsync<
       ],
     });
   }
+  if (!accounts.config.value) {
+    accounts.config.value = await getProgramDerivedAddress({
+      programAddress:
+        'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y' as Address<'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y'>,
+      seeds: [
+        getBytesEncoder().encode(
+          new Uint8Array([
+            111, 114, 97, 111, 45, 118, 114, 102, 45, 110, 101, 116, 119, 111,
+            114, 107, 45, 99, 111, 110, 102, 105, 103, 117, 114, 97, 116, 105,
+            111, 110,
+          ])
+        ),
+      ],
+    });
+  }
+  if (!accounts.random.value) {
+    accounts.random.value = await getProgramDerivedAddress({
+      programAddress:
+        'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y' as Address<'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y'>,
+      seeds: [
+        getBytesEncoder().encode(
+          new Uint8Array([
+            111, 114, 97, 111, 45, 118, 114, 102, 45, 114, 97, 110, 100, 111,
+            109, 110, 101, 115, 115, 45, 114, 101, 113, 117, 101, 115, 116,
+          ])
+        ),
+        fixEncoderSize(getBytesEncoder(), 32).encode(expectSome(args.force)),
+      ],
+    });
+  }
+  if (!accounts.vrf.value) {
+    accounts.vrf.value =
+      'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y' as Address<'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y'>;
+  }
+  if (!accounts.systemProgram.value) {
+    accounts.systemProgram.value =
+      '11111111111111111111111111111111' as Address<'11111111111111111111111111111111'>;
+  }
 
   const getAccountMeta = getAccountMetaFactory(programAddress, 'programId');
   return Object.freeze({
     accounts: [
       getAccountMeta(accounts.vaultAuthority),
       getAccountMeta(accounts.vault),
+      getAccountMeta(accounts.treasury),
+      getAccountMeta(accounts.config),
+      getAccountMeta(accounts.random),
+      getAccountMeta(accounts.vrf),
+      getAccountMeta(accounts.systemProgram),
     ],
-    data: getCommitDrawInstructionDataEncoder().encode({}),
+    data: getCommitDrawInstructionDataEncoder().encode(
+      args as CommitDrawInstructionDataArgs
+    ),
     programAddress,
   } as CommitDrawInstruction<
     TProgramAddress,
     TAccountVaultAuthority,
-    TAccountVault
+    TAccountVault,
+    TAccountTreasury,
+    TAccountConfig,
+    TAccountRandom,
+    TAccountVrf,
+    TAccountSystemProgram
   >);
 }
 
 export type CommitDrawInput<
   TAccountVaultAuthority extends string = string,
   TAccountVault extends string = string,
+  TAccountTreasury extends string = string,
+  TAccountConfig extends string = string,
+  TAccountRandom extends string = string,
+  TAccountVrf extends string = string,
+  TAccountSystemProgram extends string = string,
 > = {
   vaultAuthority: TransactionSigner<TAccountVaultAuthority>;
   vault: Address<TAccountVault>;
+  treasury: Address<TAccountTreasury>;
+  config: Address<TAccountConfig>;
+  random: Address<TAccountRandom>;
+  vrf?: Address<TAccountVrf>;
+  systemProgram?: Address<TAccountSystemProgram>;
+  force: CommitDrawInstructionDataArgs['force'];
 };
 
 export function getCommitDrawInstruction<
   TAccountVaultAuthority extends string,
   TAccountVault extends string,
+  TAccountTreasury extends string,
+  TAccountConfig extends string,
+  TAccountRandom extends string,
+  TAccountVrf extends string,
+  TAccountSystemProgram extends string,
   TProgramAddress extends Address = typeof ON_CHAIN_LOTTERY_PROGRAM_ADDRESS,
 >(
-  input: CommitDrawInput<TAccountVaultAuthority, TAccountVault>,
+  input: CommitDrawInput<
+    TAccountVaultAuthority,
+    TAccountVault,
+    TAccountTreasury,
+    TAccountConfig,
+    TAccountRandom,
+    TAccountVrf,
+    TAccountSystemProgram
+  >,
   config?: { programAddress?: TProgramAddress }
 ): CommitDrawInstruction<
   TProgramAddress,
   TAccountVaultAuthority,
-  TAccountVault
+  TAccountVault,
+  TAccountTreasury,
+  TAccountConfig,
+  TAccountRandom,
+  TAccountVrf,
+  TAccountSystemProgram
 > {
   // Program address.
   const programAddress =
@@ -181,24 +332,54 @@ export function getCommitDrawInstruction<
   const originalAccounts = {
     vaultAuthority: { value: input.vaultAuthority ?? null, isWritable: true },
     vault: { value: input.vault ?? null, isWritable: true },
+    treasury: { value: input.treasury ?? null, isWritable: true },
+    config: { value: input.config ?? null, isWritable: true },
+    random: { value: input.random ?? null, isWritable: true },
+    vrf: { value: input.vrf ?? null, isWritable: false },
+    systemProgram: { value: input.systemProgram ?? null, isWritable: false },
   };
   const accounts = originalAccounts as Record<
     keyof typeof originalAccounts,
     ResolvedAccount
   >;
 
+  // Original args.
+  const args = { ...input };
+
+  // Resolve default values.
+  if (!accounts.vrf.value) {
+    accounts.vrf.value =
+      'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y' as Address<'VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y'>;
+  }
+  if (!accounts.systemProgram.value) {
+    accounts.systemProgram.value =
+      '11111111111111111111111111111111' as Address<'11111111111111111111111111111111'>;
+  }
+
   const getAccountMeta = getAccountMetaFactory(programAddress, 'programId');
   return Object.freeze({
     accounts: [
       getAccountMeta(accounts.vaultAuthority),
       getAccountMeta(accounts.vault),
+      getAccountMeta(accounts.treasury),
+      getAccountMeta(accounts.config),
+      getAccountMeta(accounts.random),
+      getAccountMeta(accounts.vrf),
+      getAccountMeta(accounts.systemProgram),
     ],
-    data: getCommitDrawInstructionDataEncoder().encode({}),
+    data: getCommitDrawInstructionDataEncoder().encode(
+      args as CommitDrawInstructionDataArgs
+    ),
     programAddress,
   } as CommitDrawInstruction<
     TProgramAddress,
     TAccountVaultAuthority,
-    TAccountVault
+    TAccountVault,
+    TAccountTreasury,
+    TAccountConfig,
+    TAccountRandom,
+    TAccountVrf,
+    TAccountSystemProgram
   >);
 }
 
@@ -210,6 +391,11 @@ export type ParsedCommitDrawInstruction<
   accounts: {
     vaultAuthority: TAccountMetas[0];
     vault: TAccountMetas[1];
+    treasury: TAccountMetas[2];
+    config: TAccountMetas[3];
+    random: TAccountMetas[4];
+    vrf: TAccountMetas[5];
+    systemProgram: TAccountMetas[6];
   };
   data: CommitDrawInstructionData;
 };
@@ -222,7 +408,7 @@ export function parseCommitDrawInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>
 ): ParsedCommitDrawInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 2) {
+  if (instruction.accounts.length < 7) {
     // TODO: Coded error.
     throw new Error('Not enough accounts');
   }
@@ -234,7 +420,15 @@ export function parseCommitDrawInstruction<
   };
   return {
     programAddress: instruction.programAddress,
-    accounts: { vaultAuthority: getNextAccount(), vault: getNextAccount() },
+    accounts: {
+      vaultAuthority: getNextAccount(),
+      vault: getNextAccount(),
+      treasury: getNextAccount(),
+      config: getNextAccount(),
+      random: getNextAccount(),
+      vrf: getNextAccount(),
+      systemProgram: getNextAccount(),
+    },
     data: getCommitDrawInstructionDataDecoder().decode(instruction.data),
   };
 }

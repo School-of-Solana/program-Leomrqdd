@@ -6,5 +6,6 @@
  * @see https://github.com/codama-idl/codama
  */
 
+export * from './networkState';
 export * from './participant';
 export * from './vault';

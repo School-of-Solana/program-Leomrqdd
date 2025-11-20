@@ -26,6 +26,7 @@ export const ON_CHAIN_LOTTERY_PROGRAM_ADDRESS =
   '4NYnTNsnq6xhph3QV9yKdou9uFuAmAqR236bPu8uXPcc' as Address<'4NYnTNsnq6xhph3QV9yKdou9uFuAmAqR236bPu8uXPcc'>;
 
 export enum OnChainLotteryAccount {
+  NetworkState,
   Participant,
   Vault,
 }
@@ -34,6 +35,17 @@ export function identifyOnChainLotteryAccount(
   account: { data: ReadonlyUint8Array } | ReadonlyUint8Array
 ): OnChainLotteryAccount {
   const data = 'data' in account ? account.data : account;
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([212, 237, 148, 56, 97, 245, 51, 169])
+      ),
+      0
+    )
+  ) {
+    return OnChainLotteryAccount.NetworkState;
+  }
   if (
     containsBytes(
       data,

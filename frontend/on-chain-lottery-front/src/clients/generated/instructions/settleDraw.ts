@@ -16,8 +16,6 @@ import {
   getProgramDerivedAddress,
   getStructDecoder,
   getStructEncoder,
-  getU64Decoder,
-  getU64Encoder,
   transformEncoder,
   type AccountMeta,
   type AccountSignerMeta,
@@ -28,6 +26,7 @@ import {
   type Instruction,
   type InstructionWithAccounts,
   type InstructionWithData,
+  type ReadonlyAccount,
   type ReadonlyUint8Array,
   type TransactionSigner,
   type WritableAccount,
@@ -52,6 +51,7 @@ export type SettleDrawInstruction<
   TProgram extends string = typeof ON_CHAIN_LOTTERY_PROGRAM_ADDRESS,
   TAccountVaultAuthority extends string | AccountMeta<string> = string,
   TAccountVault extends string | AccountMeta<string> = string,
+  TAccountRandom extends string | AccountMeta<string> = string,
   TRemainingAccounts extends readonly AccountMeta<string>[] = [],
 > = Instruction<TProgram> &
   InstructionWithData<ReadonlyUint8Array> &
@@ -64,23 +64,20 @@ export type SettleDrawInstruction<
       TAccountVault extends string
         ? WritableAccount<TAccountVault>
         : TAccountVault,
+      TAccountRandom extends string
+        ? ReadonlyAccount<TAccountRandom>
+        : TAccountRandom,
       ...TRemainingAccounts,
     ]
   >;
 
-export type SettleDrawInstructionData = {
-  discriminator: ReadonlyUint8Array;
-  winnerId: bigint;
-};
+export type SettleDrawInstructionData = { discriminator: ReadonlyUint8Array };
 
-export type SettleDrawInstructionDataArgs = { winnerId: number | bigint };
+export type SettleDrawInstructionDataArgs = {};
 
 export function getSettleDrawInstructionDataEncoder(): FixedSizeEncoder<SettleDrawInstructionDataArgs> {
   return transformEncoder(
-    getStructEncoder([
-      ['discriminator', fixEncoderSize(getBytesEncoder(), 8)],
-      ['winnerId', getU64Encoder()],
-    ]),
+    getStructEncoder([['discriminator', fixEncoderSize(getBytesEncoder(), 8)]]),
     (value) => ({ ...value, discriminator: SETTLE_DRAW_DISCRIMINATOR })
   );
 }
@@ -88,7 +85,6 @@ export function getSettleDrawInstructionDataEncoder(): FixedSizeEncoder<SettleDr
 export function getSettleDrawInstructionDataDecoder(): FixedSizeDecoder<SettleDrawInstructionData> {
   return getStructDecoder([
     ['discriminator', fixDecoderSize(getBytesDecoder(), 8)],
-    ['winnerId', getU64Decoder()],
   ]);
 }
 
@@ -105,21 +101,32 @@ export function getSettleDrawInstructionDataCodec(): FixedSizeCodec<
 export type SettleDrawAsyncInput<
   TAccountVaultAuthority extends string = string,
   TAccountVault extends string = string,
+  TAccountRandom extends string = string,
 > = {
   vaultAuthority: TransactionSigner<TAccountVaultAuthority>;
   vault?: Address<TAccountVault>;
-  winnerId: SettleDrawInstructionDataArgs['winnerId'];
+  random: Address<TAccountRandom>;
 };
 
 export async function getSettleDrawInstructionAsync<
   TAccountVaultAuthority extends string,
   TAccountVault extends string,
+  TAccountRandom extends string,
   TProgramAddress extends Address = typeof ON_CHAIN_LOTTERY_PROGRAM_ADDRESS,
 >(
-  input: SettleDrawAsyncInput<TAccountVaultAuthority, TAccountVault>,
+  input: SettleDrawAsyncInput<
+    TAccountVaultAuthority,
+    TAccountVault,
+    TAccountRandom
+  >,
   config?: { programAddress?: TProgramAddress }
 ): Promise<
-  SettleDrawInstruction<TProgramAddress, TAccountVaultAuthority, TAccountVault>
+  SettleDrawInstruction<
+    TProgramAddress,
+    TAccountVaultAuthority,
+    TAccountVault,
+    TAccountRandom
+  >
 > {
   // Program address.
   const programAddress =
@@ -129,14 +136,12 @@ export async function getSettleDrawInstructionAsync<
   const originalAccounts = {
     vaultAuthority: { value: input.vaultAuthority ?? null, isWritable: true },
     vault: { value: input.vault ?? null, isWritable: true },
+    random: { value: input.random ?? null, isWritable: false },
   };
   const accounts = originalAccounts as Record<
     keyof typeof originalAccounts,
     ResolvedAccount
   >;
-
-  // Original args.
-  const args = { ...input };
 
   // Resolve default values.
   if (!accounts.vault.value) {
@@ -156,38 +161,41 @@ export async function getSettleDrawInstructionAsync<
     accounts: [
       getAccountMeta(accounts.vaultAuthority),
       getAccountMeta(accounts.vault),
+      getAccountMeta(accounts.random),
     ],
-    data: getSettleDrawInstructionDataEncoder().encode(
-      args as SettleDrawInstructionDataArgs
-    ),
+    data: getSettleDrawInstructionDataEncoder().encode({}),
     programAddress,
   } as SettleDrawInstruction<
     TProgramAddress,
     TAccountVaultAuthority,
-    TAccountVault
+    TAccountVault,
+    TAccountRandom
   >);
 }
 
 export type SettleDrawInput<
   TAccountVaultAuthority extends string = string,
   TAccountVault extends string = string,
+  TAccountRandom extends string = string,
 > = {
   vaultAuthority: TransactionSigner<TAccountVaultAuthority>;
   vault: Address<TAccountVault>;
-  winnerId: SettleDrawInstructionDataArgs['winnerId'];
+  random: Address<TAccountRandom>;
 };
 
 export function getSettleDrawInstruction<
   TAccountVaultAuthority extends string,
   TAccountVault extends string,
+  TAccountRandom extends string,
   TProgramAddress extends Address = typeof ON_CHAIN_LOTTERY_PROGRAM_ADDRESS,
 >(
-  input: SettleDrawInput<TAccountVaultAuthority, TAccountVault>,
+  input: SettleDrawInput<TAccountVaultAuthority, TAccountVault, TAccountRandom>,
   config?: { programAddress?: TProgramAddress }
 ): SettleDrawInstruction<
   TProgramAddress,
   TAccountVaultAuthority,
-  TAccountVault
+  TAccountVault,
+  TAccountRandom
 > {
   // Program address.
   const programAddress =
@@ -197,29 +205,27 @@ export function getSettleDrawInstruction<
   const originalAccounts = {
     vaultAuthority: { value: input.vaultAuthority ?? null, isWritable: true },
     vault: { value: input.vault ?? null, isWritable: true },
+    random: { value: input.random ?? null, isWritable: false },
   };
   const accounts = originalAccounts as Record<
     keyof typeof originalAccounts,
     ResolvedAccount
   >;
 
-  // Original args.
-  const args = { ...input };
-
   const getAccountMeta = getAccountMetaFactory(programAddress, 'programId');
   return Object.freeze({
     accounts: [
       getAccountMeta(accounts.vaultAuthority),
       getAccountMeta(accounts.vault),
+      getAccountMeta(accounts.random),
     ],
-    data: getSettleDrawInstructionDataEncoder().encode(
-      args as SettleDrawInstructionDataArgs
-    ),
+    data: getSettleDrawInstructionDataEncoder().encode({}),
     programAddress,
   } as SettleDrawInstruction<
     TProgramAddress,
     TAccountVaultAuthority,
-    TAccountVault
+    TAccountVault,
+    TAccountRandom
   >);
 }
 
@@ -231,6 +237,7 @@ export type ParsedSettleDrawInstruction<
   accounts: {
     vaultAuthority: TAccountMetas[0];
     vault: TAccountMetas[1];
+    random: TAccountMetas[2];
   };
   data: SettleDrawInstructionData;
 };
@@ -243,7 +250,7 @@ export function parseSettleDrawInstruction<
     InstructionWithAccounts<TAccountMetas> &
     InstructionWithData<ReadonlyUint8Array>
 ): ParsedSettleDrawInstruction<TProgram, TAccountMetas> {
-  if (instruction.accounts.length < 2) {
+  if (instruction.accounts.length < 3) {
     // TODO: Coded error.
     throw new Error('Not enough accounts');
   }
@@ -255,7 +262,11 @@ export function parseSettleDrawInstruction<
   };
   return {
     programAddress: instruction.programAddress,
-    accounts: { vaultAuthority: getNextAccount(), vault: getNextAccount() },
+    accounts: {
+      vaultAuthority: getNextAccount(),
+      vault: getNextAccount(),
+      random: getNextAccount(),
+    },
     data: getSettleDrawInstructionDataDecoder().decode(instruction.data),
   };
 }
