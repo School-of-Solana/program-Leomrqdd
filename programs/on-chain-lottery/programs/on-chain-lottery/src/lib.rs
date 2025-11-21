@@ -60,4 +60,8 @@ pub mod on_chain_lottery {
     pub fn toggle_lock(ctx: Context<ToggleLock>) -> Result<()> {
       _toggle_lock(ctx)
     }
+
+    pub fn close_participant(ctx: Context<CloseParticipant>) -> Result<()> {
+      _close_participant(ctx)
+    }
 }

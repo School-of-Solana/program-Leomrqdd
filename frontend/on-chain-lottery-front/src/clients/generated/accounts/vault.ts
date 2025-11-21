@@ -50,6 +50,7 @@ export function getVaultDiscriminatorBytes() {
 export type Vault = {
   discriminator: ReadonlyUint8Array;
   vaultAuthority: Address;
+  lotteryId: bigint;
   locked: boolean;
   participantCount: bigint;
   randomnessAccount: Address;
@@ -61,6 +62,7 @@ export type Vault = {
 
 export type VaultArgs = {
   vaultAuthority: Address;
+  lotteryId: number | bigint;
   locked: boolean;
   participantCount: number | bigint;
   randomnessAccount: Address;
@@ -75,6 +77,7 @@ export function getVaultEncoder(): FixedSizeEncoder<VaultArgs> {
     getStructEncoder([
       ['discriminator', fixEncoderSize(getBytesEncoder(), 8)],
       ['vaultAuthority', getAddressEncoder()],
+      ['lotteryId', getU64Encoder()],
       ['locked', getBooleanEncoder()],
       ['participantCount', getU64Encoder()],
       ['randomnessAccount', getAddressEncoder()],
@@ -91,6 +94,7 @@ export function getVaultDecoder(): FixedSizeDecoder<Vault> {
   return getStructDecoder([
     ['discriminator', fixDecoderSize(getBytesDecoder(), 8)],
     ['vaultAuthority', getAddressDecoder()],
+    ['lotteryId', getU64Decoder()],
     ['locked', getBooleanDecoder()],
     ['participantCount', getU64Decoder()],
     ['randomnessAccount', getAddressDecoder()],
@@ -159,5 +163,5 @@ export async function fetchAllMaybeVault(
 }
 
 export function getVaultSize(): number {
-  return 99;
+  return 107;
 }

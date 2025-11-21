@@ -12,6 +12,7 @@ import {
   ON_CHAIN_LOTTERY_PROGRAM_ADDRESS,
   fetchMaybeParticipant,
   getParticipantDiscriminatorBytes,
+  fetchMaybeVault,
 } from '@/clients/generated'
 
 type ParticipantItem = { id: bigint; user: Address }
@@ -42,6 +43,19 @@ export function AdminParticipants({ client, account }: { client: SolanaClient; a
     try {
       const v = await deriveVaultPda(signer.address as Address)
       setVault(v)
+      
+      // Check if vault exists
+      const maybeVault = await fetchMaybeVault(client.rpc, v)
+      console.log('maybeVault', maybeVault)
+      if (!maybeVault.exists) {
+        // Vault doesn't exist, no participants to show
+        setParticipants([])
+        return
+      }
+      
+      const currentLotteryId = maybeVault.data.lotteryId
+      console.log('currentLotteryId', currentLotteryId)
+      
       // Build filters: match Participant discriminator and vault field
       // Convert the 8-byte discriminator to a base58 string as required by memcmp
       const discB58 = getBase58Decoder().decode(getParticipantDiscriminatorBytes()) as unknown as Base58EncodedBytes
@@ -59,7 +73,8 @@ export function AdminParticipants({ client, account }: { client: SolanaClient; a
       const items: ParticipantItem[] = []
       for (const { pubkey } of gpa) {
         const maybe = await fetchMaybeParticipant(client.rpc, pubkey as Address)
-        if (maybe.exists) {
+        // Only include participants from the current lottery
+        if (maybe.exists && maybe.data.lotteryId === currentLotteryId) {
           items.push({ id: maybe.data.id, user: maybe.data.user as Address })
         }
       }

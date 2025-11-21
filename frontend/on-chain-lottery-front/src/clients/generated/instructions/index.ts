@@ -7,6 +7,7 @@
  */
 
 export * from './claimIfWinner';
+export * from './closeParticipant';
 export * from './commitDraw';
 export * from './deposit';
 export * from './initVault';

@@ -25,7 +25,7 @@ pub struct Deposit<'info> {
     #[account(mut)]
     pub vault: Account<'info,Vault>,
     #[account(
-        init_if_needed,
+        init,
         payer = user,
         space = 8 + Participant::INIT_SPACE,
         seeds = [b"participant", vault.key().as_ref(),user.key().as_ref()],
@@ -44,13 +44,13 @@ pub fn _deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     require!(user.lamports() >= amount,VaultError::InsufficientBalance);
     require!(vault.locked == false, VaultError::VaultLocked);
 
-    if !participant.is_initialized {
-        participant.vault = vault.key();
-        participant.user = user.key();
-        participant.id = vault.participant_count;
-        participant.is_initialized = true;
-        vault.participant_count = vault.participant_count.checked_add(1).ok_or(VaultError::Overflow)?;
-    }
+    // Initialize participant (only possible once with 'init' constraint)
+    participant.vault = vault.key();
+    participant.lottery_id = vault.lottery_id;
+    participant.user = user.key();
+    participant.id = vault.participant_count;
+    participant.is_initialized = true;
+    vault.participant_count = vault.participant_count.checked_add(1).ok_or(VaultError::Overflow)?;
 
     let cpi_context = CpiContext::new(
         ctx.accounts.system_program.to_account_info(),

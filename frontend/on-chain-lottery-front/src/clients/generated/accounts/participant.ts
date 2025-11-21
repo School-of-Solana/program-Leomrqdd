@@ -50,6 +50,7 @@ export function getParticipantDiscriminatorBytes() {
 export type Participant = {
   discriminator: ReadonlyUint8Array;
   vault: Address;
+  lotteryId: bigint;
   user: Address;
   id: bigint;
   isInitialized: boolean;
@@ -57,6 +58,7 @@ export type Participant = {
 
 export type ParticipantArgs = {
   vault: Address;
+  lotteryId: number | bigint;
   user: Address;
   id: number | bigint;
   isInitialized: boolean;
@@ -67,6 +69,7 @@ export function getParticipantEncoder(): FixedSizeEncoder<ParticipantArgs> {
     getStructEncoder([
       ['discriminator', fixEncoderSize(getBytesEncoder(), 8)],
       ['vault', getAddressEncoder()],
+      ['lotteryId', getU64Encoder()],
       ['user', getAddressEncoder()],
       ['id', getU64Encoder()],
       ['isInitialized', getBooleanEncoder()],
@@ -79,6 +82,7 @@ export function getParticipantDecoder(): FixedSizeDecoder<Participant> {
   return getStructDecoder([
     ['discriminator', fixDecoderSize(getBytesDecoder(), 8)],
     ['vault', getAddressDecoder()],
+    ['lotteryId', getU64Decoder()],
     ['user', getAddressDecoder()],
     ['id', getU64Decoder()],
     ['isInitialized', getBooleanDecoder()],
@@ -146,5 +150,5 @@ export async function fetchAllMaybeParticipant(
 }
 
 export function getParticipantSize(): number {
-  return 81;
+  return 89;
 }

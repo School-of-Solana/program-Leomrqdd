@@ -49,7 +49,8 @@ pub fn _claim_if_winner(ctx: Context<ClaimIfWinner>) -> Result<()> {
     require!(vault.locked == true, VaultError::VaultNotLocked);
     require!(vault.drawn == true, VaultError::NotDrawn);
     require!(vault.claimed == false, VaultError::AlreadyClaimed);
-    require!(participant.vault== vault.key(), VaultError::InvalidWinner);
+    require!(participant.vault == vault.key(), VaultError::InvalidWinner);
+    require!(participant.lottery_id == vault.lottery_id, VaultError::InvalidWinner);
     require!(participant.is_initialized, VaultError::InvalidWinner);
     require!(vault.winner_id == participant.id, VaultError::InvalidWinner);
 
@@ -64,6 +65,7 @@ pub fn _claim_if_winner(ctx: Context<ClaimIfWinner>) -> Result<()> {
      vault.winner_id = 0;
      vault.drawn = false;
      vault.claimed = true;
+     
     
     emit!(WinnerClaimedEvent {
         vault: vault.key(),

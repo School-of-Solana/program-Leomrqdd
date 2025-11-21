@@ -15,6 +15,7 @@ import {
 } from 'gill';
 import {
   type ParsedClaimIfWinnerInstruction,
+  type ParsedCloseParticipantInstruction,
   type ParsedCommitDrawInstruction,
   type ParsedDepositInstruction,
   type ParsedInitVaultInstruction,
@@ -75,6 +76,7 @@ export function identifyOnChainLotteryAccount(
 
 export enum OnChainLotteryInstruction {
   ClaimIfWinner,
+  CloseParticipant,
   CommitDraw,
   Deposit,
   InitVault,
@@ -96,6 +98,17 @@ export function identifyOnChainLotteryInstruction(
     )
   ) {
     return OnChainLotteryInstruction.ClaimIfWinner;
+  }
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([192, 162, 92, 5, 148, 191, 207, 151])
+      ),
+      0
+    )
+  ) {
+    return OnChainLotteryInstruction.CloseParticipant;
   }
   if (
     containsBytes(
@@ -163,6 +176,9 @@ export type ParsedOnChainLotteryInstruction<
   | ({
       instructionType: OnChainLotteryInstruction.ClaimIfWinner;
     } & ParsedClaimIfWinnerInstruction<TProgram>)
+  | ({
+      instructionType: OnChainLotteryInstruction.CloseParticipant;
+    } & ParsedCloseParticipantInstruction<TProgram>)
   | ({
       instructionType: OnChainLotteryInstruction.CommitDraw;
     } & ParsedCommitDrawInstruction<TProgram>)

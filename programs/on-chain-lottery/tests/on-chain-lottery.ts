@@ -65,6 +65,7 @@ describe("on-chain-lottery", () => {
   console.log("userB:", userB.publicKey.toBase58())
 
 
+
   before("derive PDAs & fund users", async () => {
     [vaultPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("vault"), vaultAuthority.publicKey.toBuffer()],
@@ -200,47 +201,25 @@ describe("on-chain-lottery", () => {
   });
 
 
-  it("userA and user B should be able to deposit again", async () => {
-    const before = await provider.connection.getBalance(vaultPda)
+  it("userA should not be able to deposit again (participant already exists)", async () => {
     const amount = new BN(0.001 * LAMPORTS_PER_SOL);
 
-    const [pa] = PublicKey.findProgramAddressSync(
-      [Buffer.from("participant"), vaultPda.toBuffer(), userA.publicKey.toBuffer()],
-      program.programId
-    );
-    const tx1 = await program.methods
-      .deposit(amount)
-      .accounts({
-        user: userA.publicKey,
-        vault: vaultPda,
-      })
-      .signers([userA])
-      .rpc();
+    try {
+      await program.methods
+        .deposit(amount)
+        .accounts({
+          user: userA.publicKey,
+          vault: vaultPda,
+        })
+        .signers([userA])
+        .rpc();
 
-    console.log("Your transaction signature", tx1);
-
-    const [pb] = PublicKey.findProgramAddressSync(
-      [Buffer.from("participant"), vaultPda.toBuffer(), userB.publicKey.toBuffer()],
-      program.programId
-    );
-
-    const tx2 = await program.methods
-      .deposit(amount)
-      .accounts({
-        user: userB.publicKey,
-        vault: vaultPda,
-      })
-      .signers([userB])
-      .rpc();
-
-    console.log("Your transaction signature", tx2);
-
-    const after = await provider.connection.getBalance(vaultPda)
-    const expectedIncrease = 2 * new BN(0.001 * LAMPORTS_PER_SOL).toNumber();
-    expect(after - before).to.eq(expectedIncrease);
-
-    const vault = await program.account.vault.fetch(vaultPda);
-    expect((vault.participantCount as BN).toNumber()).to.eq(2);
+      expect.fail("deposit should fail when participant already exists");
+    } catch (e: any) {
+      // Should fail because participant account already exists
+      expect(e.toString()).to.include("already in use");
+      console.log("✅ Correctly prevented duplicate deposit");
+    }
   });
 
 
@@ -259,36 +238,6 @@ describe("on-chain-lottery", () => {
   console.log("Your transaction signature", tx);
 
   })
-
-
-
-  it("userA should not be able to deposit again", async () => {
-
-    const amount = new BN(0.001 * LAMPORTS_PER_SOL);
-
-    try {
-      const tx1 = await program.methods
-      .deposit(amount)
-      .accounts({
-        user: userA.publicKey,
-        vault: vaultPda,
-      })
-      .signers([userA])
-      .rpc();
-
-      console.log("Your transaction signature", tx1);
-      expect.fail("deposit should fail when vault is locked");
-
-    }
-    catch (e: any){
-
-      const logs: string[] = Array.isArray(e?.errorLogs) ? e.errorLogs : [];
-      const haystack = logs.join(" ");
-      expect(haystack).to.match(/Vault is locked/i);
-    }
-
-
-  });
 
 
   it("commit and settle draw (ORAO VRF)", async () => {
@@ -471,6 +420,144 @@ describe("on-chain-lottery", () => {
   // The above test already validates vault closure and payout to the winner.
 
 
+  it("Should allow creating a new lottery and reinitialize old participants", async () => {
+    // At this point, the vault has been closed but participant accounts still exist
+    
+    // Create a new vault for a new lottery
+    const tx = await program.methods
+      .initVault(false)
+      .accounts({
+        vaultAuthority: vaultAuthority.publicKey,
+      })
+      .signers([vaultAuthority])
+      .rpc();
 
+    console.log("New vault initialized:", tx);
+
+    // Verify the new vault exists and has participantCount = 0
+    const newVault = await program.account.vault.fetch(vaultPda);
+    expect((newVault.participantCount as BN).toNumber()).to.eq(0);
+    expect(newVault.locked).to.eq(false);
+    expect(newVault.drawn).to.eq(false);
+    expect(newVault.claimed).to.eq(false);
+
+    // Get participant PDAs for userA and userB (they still exist from previous lottery)
+    const [participantPdaA] = PublicKey.findProgramAddressSync(
+      [Buffer.from("participant"), vaultPda.toBuffer(), userA.publicKey.toBuffer()],
+      program.programId
+    );
+    const [participantPdaB] = PublicKey.findProgramAddressSync(
+      [Buffer.from("participant"), vaultPda.toBuffer(), userB.publicKey.toBuffer()],
+      program.programId
+    );
+
+    // Check that old participant accounts exist
+    const oldParticipantA = await provider.connection.getAccountInfo(participantPdaA);
+    const oldParticipantB = await provider.connection.getAccountInfo(participantPdaB);
+    console.log("Old participant A exists:", oldParticipantA !== null);
+    console.log("Old participant B exists:", oldParticipantB !== null);
+
+    // Close old participant accounts before depositing in new lottery
+    if (oldParticipantA) {
+      await program.methods
+        .closeParticipant()
+        .accounts({
+          user: userA.publicKey,
+          participant: participantPdaA,
+        })
+        .signers([userA])
+        .rpc();
+      console.log("Closed old participant A");
+    }
+
+    if (oldParticipantB) {
+      await program.methods
+        .closeParticipant()
+        .accounts({
+          user: userB.publicKey,
+          participant: participantPdaB,
+        })
+        .signers([userB])
+        .rpc();
+      console.log("Closed old participant B");
+    }
+
+    // Deposit with userA (creating new participant)
+    const amount = new BN(0.001 * LAMPORTS_PER_SOL);
+    await program.methods
+      .deposit(amount)
+      .accounts({
+        user: userA.publicKey,
+        vault: vaultPda,
+      })
+      .signers([userA])
+      .rpc();
+
+    // Verify userA's participant has been reinitialized with new ID = 0
+    const participantA = await program.account.participant.fetch(participantPdaA);
+    const newVaultA = await program.account.vault.fetch(vaultPda);
+    expect((participantA.id as BN).toNumber()).to.eq(0);
+    expect(participantA.vault.toBase58()).to.eq(vaultPda.toBase58());
+    expect(participantA.user.toBase58()).to.eq(userA.publicKey.toBase58());
+    expect(participantA.isInitialized).to.eq(true);
+    // CRITICAL: Verify lottery_id matches the new vault (after rebuild)
+    expect((participantA.lotteryId as BN).toString()).to.eq((newVaultA.lotteryId as BN).toString());
+    console.log("UserA reinitialized with ID:", (participantA.id as BN).toNumber());
+    console.log("✅ UserA has new participant account in new lottery");
+
+    // Verify vault participant count increased
+    let vaultAfterA = await program.account.vault.fetch(vaultPda);
+    expect((vaultAfterA.participantCount as BN).toNumber()).to.eq(1);
+
+    // Deposit with userB (old participant)
+    await program.methods
+      .deposit(amount)
+      .accounts({
+        user: userB.publicKey,
+        vault: vaultPda,
+      })
+      .signers([userB])
+      .rpc();
+
+    // Verify userB's participant has been reinitialized with new ID = 1
+    const participantB = await program.account.participant.fetch(participantPdaB);
+    const newVaultB = await program.account.vault.fetch(vaultPda);
+    expect((participantB.id as BN).toNumber()).to.eq(1);
+    expect(participantB.vault.toBase58()).to.eq(vaultPda.toBase58());
+    expect(participantB.user.toBase58()).to.eq(userB.publicKey.toBase58());
+    expect(participantB.isInitialized).to.eq(true);
+    // CRITICAL: Verify lottery_id matches the new vault (after rebuild)
+    expect((participantB.lotteryId as BN).toString()).to.eq((newVaultB.lotteryId as BN).toString());
+    console.log("UserB reinitialized with ID:", (participantB.id as BN).toNumber());
+    console.log("✅ UserB has new participant account in new lottery");
+
+    // Verify final vault participant count
+    let vaultAfterB = await program.account.vault.fetch(vaultPda);
+    expect((vaultAfterB.participantCount as BN).toNumber()).to.eq(2);
+
+    console.log("✅ Old participants successfully reinitialized in new lottery!");
+  });
+
+  it("Should fail when trying to deposit twice without closing participant", async () => {
+    // UserA tries to deposit again without closing their participant account
+    const amount = new BN(0.001 * LAMPORTS_PER_SOL);
+    
+    try {
+      await program.methods
+        .deposit(amount)
+        .accounts({
+          user: userA.publicKey,
+          vault: vaultPda,
+        })
+        .signers([userA])
+        .rpc();
+      expect.fail("Should have failed - participant already exists");
+    } catch (error: any) {
+      // Anchor error when trying to init an account that already exists
+      expect(error.toString()).to.include("already in use");
+      console.log("✅ Correctly prevented duplicate deposit without closing participant");
+    }
+  });
 
 });
+

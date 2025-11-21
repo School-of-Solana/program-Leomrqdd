@@ -38,7 +38,11 @@ pub struct InitializeVault<'info> {
 pub fn _init_vault(ctx: Context<InitializeVault>, locked: bool) -> Result<()> {
   let vault = &mut ctx.accounts.vault;
 
+  // Get the current slot as lottery_id (unique identifier for this lottery)
+  let lottery_id = Clock::get()?.slot;
+
   vault.vault_authority = ctx.accounts.vault_authority.key();
+  vault.lottery_id = lottery_id;
   vault.locked = locked;
   vault.participant_count = 0;
   vault.randomness_account = Pubkey::default();

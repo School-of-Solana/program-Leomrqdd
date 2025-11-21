@@ -2,6 +2,7 @@ import { Card } from '@/components/ui/card'
 import { useSolana } from '@/components/solana/use-solana'
 import { LotteryDeposit } from './lottery-deposit'
 import { LotteryClaim } from './lottery-claim'
+import { LotteryCloseParticipant } from './lottery-close-participant'
 
 export default function LotteryFeature() {
   const { account, connected, client } = useSolana()
@@ -16,6 +17,7 @@ export default function LotteryFeature() {
         <>
           <LotteryDeposit client={client} account={account} />
           <LotteryClaim client={client} account={account} />
+          <LotteryCloseParticipant client={client} account={account} />
         </>
       )}
     </div>

@@ -46,6 +46,7 @@ export function AdminSettleDraw({ client, account }: { client: SolanaClient; acc
     address: string
     locked: boolean
     participantCount: bigint
+    balance: bigint
     drawn: boolean
     winnerId: bigint
     claimed: boolean
@@ -66,10 +67,15 @@ export function AdminSettleDraw({ client, account }: { client: SolanaClient; acc
       const maybe = await fetchMaybeVault(client.rpc, vaultAddr as Address)
       setVaultExists(maybe.exists)
       if (maybe.exists) {
+        // Get vault balance
+        const balanceResult = await client.rpc.getBalance(vaultAddr as Address, { commitment: 'confirmed' }).send()
+        const balance = balanceResult.value
+        
         setVaultInfo({
           address: vaultAddr,
           locked: maybe.data.locked,
           participantCount: maybe.data.participantCount,
+          balance,
           drawn: maybe.data.drawn,
           winnerId: maybe.data.winnerId,
           claimed: maybe.data.claimed,
@@ -110,10 +116,16 @@ export function AdminSettleDraw({ client, account }: { client: SolanaClient; acc
           setVaultInfo(null)
           return
         }
+        
+        // Get vault balance
+        const balanceResult = await client.rpc.getBalance(vaultAddr as Address, { commitment: 'confirmed' }).send()
+        const balance = balanceResult.value
+        
         setVaultInfo({
           address: vaultAddr,
           locked: maybeVault.data.locked,
           participantCount: maybeVault.data.participantCount,
+          balance,
           drawn: maybeVault.data.drawn,
           winnerId: maybeVault.data.winnerId,
           claimed: maybeVault.data.claimed,
@@ -320,6 +332,7 @@ export function AdminSettleDraw({ client, account }: { client: SolanaClient; acc
             <>
               <div className="font-medium mb-2">Vault Information</div>
               <div>Vault: <span className="font-mono text-xs">{vaultInfo.address}</span></div>
+              <div>Amount to win: {(Number(vaultInfo.balance) / 1_000_000_000).toFixed(4)} SOL</div>
               <div>Locked: {vaultInfo.locked ? 'Yes' : 'No'}</div>
               <div>Participants: {vaultInfo.participantCount.toString()}</div>
               <div>Drawn: {vaultInfo.drawn ? 'Yes' : 'No'}</div>
